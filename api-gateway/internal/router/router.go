@@ -7,7 +7,13 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine) {
+
 	api := r.Group("/api")
+
+	// Public routes
+	api.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
 
 	// public services
 	{
@@ -16,7 +22,7 @@ func SetupRoutes(r *gin.Engine) {
 
 	// Secured services
 	protected := api.Group("/")
-	protected.Use(middleware.RequireAuth())
+	protected.Use(middleware.RequireAuth(), middleware.RateLimitMiddleware())
 	{
 		protected.Any("/upload/*path", handlers.ReverseProxy("upload"))
 	}
