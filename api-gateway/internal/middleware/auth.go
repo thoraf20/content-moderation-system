@@ -5,7 +5,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
+
+var jwtSecret = []byte("change_this_to_a_secure_secret")
 
 func RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -15,13 +18,18 @@ func RequireAuth() gin.HandlerFunc {
 			return
 		}
 
-		token := strings.TrimPrefix(authHeader, "Bearer ")
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		// TODO: Validate JWT token
-		if token != "valid-token-placeholder" {
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return jwtSecret, nil
+		})
+
+		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			return
 		}
+
+		// Optional: add claims to context
 
 		c.Next()
 	}
