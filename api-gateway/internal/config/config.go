@@ -24,4 +24,6 @@ func LoadConfig() {
 	}
 
 	viper.AutomaticEnv() // Allow env vars to override config
+
+	LoadServiceMap()
 }

@@ -8,6 +8,6 @@ import (
 func SetupRoutes(r *gin.Engine) {
 	api := r.Group("/api")
 	{
-		api.POST("/upload", handlers.UploadHandler)
+		api.Any("/upload/*path", handlers.ReverseProxy("upload"))
 	}
 }
