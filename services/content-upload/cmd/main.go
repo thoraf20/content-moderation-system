@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	config.LoadConfig() // Viper config
+	config.LoadConfig()
 
 	r := gin.Default()
 	r.POST("/upload", handler.HandleUpload)

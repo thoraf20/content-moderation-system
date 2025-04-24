@@ -9,7 +9,7 @@ import (
 func LoadConfig() {
 	// Load from .env first
 	viper.SetConfigFile(".env")
-	err := viper.ReadInConfig() // Try to load .env
+	err := viper.ReadInConfig()
 	if err != nil {
 		log.Println("No .env file found, continuing...")
 	}
@@ -19,7 +19,8 @@ func LoadConfig() {
 	viper.SetConfigType("yaml")
 
 	// Read from config.yaml (optional)
-	if err := viper.MergeInConfig(); err != nil {
+	if err := viper.MergeInConfig(); 
+	err != nil {
 		log.Println("config.yaml not found, continuing...")
 	}
 

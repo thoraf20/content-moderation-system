@@ -3,7 +3,9 @@ package handler
 import (
 	"content-upload/internal/config"
 	"content-upload/internal/event"
-	
+	"fmt"
+	"time"
+
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,16 +27,17 @@ func HandleUpload(c *gin.Context) {
 	os.MkdirAll(uploadDir, os.ModePerm)
 
 	for _, file := range files {
-		dst := filepath.Join(uploadDir, file.Filename)
+		filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), file.Filename)
+		dst := filepath.Join(uploadDir, filename)
+
 		if err := c.SaveUploadedFile(file, dst); 
 		err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "upload failed"})
 			return
 		}
-		uploaded = append(uploaded, file.Filename)
 
-		// Publish to Kafka (or RabbitMQ later)
-		event.PublishModerationEvent(file.Filename, dst)
+		uploaded = append(uploaded, filename)
+		event.PublishModerationEvent(filename, dst)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"uploaded": uploaded})
