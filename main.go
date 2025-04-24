@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 	"content-analysis/config"
-	// "content-analysis/consumer"
+	"content-analysis/consumer"
 )
 
 func main() {
@@ -12,5 +12,5 @@ func main() {
 	log.Println("Starting Content Moderation Service...")
 
 	// Start consuming from Redis Stream
-	// consumer.StartStreamConsumer()
+	consumer.StartStreamConsumer()
 }
