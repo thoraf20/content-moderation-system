@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"os"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
 )
 
 var ctx = context.Background()
@@ -15,17 +15,27 @@ type ModerationEvent struct {
 	Filename string `json:"filename"`
 	Path     string `json:"path"`
 	Type     string `json:"type"`
+	Content  string `json:"content,omitempty"`
 }
 
-func PublishModerationEvent(filename, path string, fileType string) {
+func PublishModerationEvent(filename, path, fileType string, rawText ...string) {
+	broker := viper.GetString("BROKER_URL")
+	stream := viper.GetString("TOPIC_NAME")
+
 	client := redis.NewClient(&redis.Options{
-		Addr: os.Getenv("BROKER_URL"), // "localhost:6379", // Default Redis port
+		Addr: broker,
 	})
+
+	defer client.Close()
 
 	event := ModerationEvent{
 		Filename: filename,
 		Path:     path,
 		Type:     fileType,
+	}
+
+	if len(rawText) > 0 {
+		event.Content = rawText[0] // Optional: Add `Content` field to ModerationEvent struct
 	}
 
 	data, err := json.Marshal(event)
@@ -36,7 +46,7 @@ func PublishModerationEvent(filename, path string, fileType string) {
 
 	// Add to stream
 	err = client.XAdd(ctx, &redis.XAddArgs{
-		Stream: os.Getenv("TOPIC_URL"), // 
+		Stream: stream, // 
 		Values: map[string]interface{}{
 			"event": data,
 		},

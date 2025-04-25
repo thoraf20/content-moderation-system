@@ -4,7 +4,6 @@ import (
 	"content-upload/internal/config"
 	"content-upload/internal/event"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -36,7 +35,6 @@ func HandleUpload(c *gin.Context) {
 		return
 	}
 
-	// files := form.File["files"]
 	var uploaded []string
 
 	uploadDir := config.Get("UPLOAD_DIR")
@@ -49,7 +47,8 @@ func HandleUpload(c *gin.Context) {
 			filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), file.Filename)
 			dst := filepath.Join(uploadDir, filename)
 
-			if err := c.SaveUploadedFile(file, dst); err != nil {
+			if err := c.SaveUploadedFile(file, dst); 
+			err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "upload failed"})
 				return
 			}
@@ -62,17 +61,10 @@ func HandleUpload(c *gin.Context) {
 
 	// 2. Handle raw text input
 	rawText := c.PostForm("text") // assumes client sends form field named `text`
+
 	if rawText != "" {
-		// Save to temporary file (optional), or just send as is
-		filename := fmt.Sprintf("text_%d.txt", time.Now().UnixNano())
-		dst := filepath.Join(uploadDir, filename)
-
-		if err := os.WriteFile(dst, []byte(rawText), 0644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save text"})
-			return
-		}
-
-		event.PublishModerationEvent(filename, dst, "text")
+		filename := fmt.Sprintf("text_%d", time.Now().UnixNano())
+		event.PublishModerationEvent(filename, "", "text", rawText)
 		uploaded = append(uploaded, filename)
 	}
 
