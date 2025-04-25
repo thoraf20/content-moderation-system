@@ -6,13 +6,13 @@ import (
 )
 
 func LoadConfig() {
-	viper.SetDefault("REDIS_URL", "localhost:6379")
-	viper.SetDefault("STREAM_NAME", "moderation_stream")
+	viper.SetDefault("BROKER_URL", "localhost:6379")
+	viper.SetDefault("TOPIC_NAME", "content_events")
 	viper.AutomaticEnv()
 
 	log.Printf("Redis: %s | Stream: %s",
-		viper.GetString("REDIS_URL"),
-		viper.GetString("STREAM_NAME"),
+		viper.GetString("BROKER_URL"),
+		viper.GetString("TOPIC_NAME"),
 	)
 }
 

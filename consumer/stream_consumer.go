@@ -1,12 +1,13 @@
 package consumer
 
 import (
+	"content-analysis/config"
+	"content-analysis/moderation"
 	"context"
 	"encoding/json"
 	"log"
-	"content-analysis/moderation"
+
 	"github.com/redis/go-redis/v9"
-	"os"
 )
 
 var ctx = context.Background()
@@ -19,19 +20,21 @@ type ModerationEvent struct {
 }
 
 func StartStreamConsumer() {
+	config.LoadConfig()
+
 	client := redis.NewClient(&redis.Options{
-		Addr: os.Getenv("BROKER_URL"),
+		Addr: config.Get("BROKER_URL"),
 	})
 
-	stream := os.Getenv("TOPIC_NAME")
+	defer client.Close()
 
-	log.Println("Listening to Redis Stream:", stream)
+	lastID := "0"
 
 	for {
 		streams, err := client.XRead(ctx, &redis.XReadArgs{
-			Streams: []string{stream, "0"},
-			Count:   1,
-			Block:   0,
+			Streams: []string{config.Get("TOPIC_NAME"), lastID},
+			Count:   0,
+			Block:   10,
 		}).Result()
 
 		if err != nil {
@@ -50,19 +53,18 @@ func StartStreamConsumer() {
 					continue
 				}
 
-				log.Printf("Processing event: %+v\n", event)
-
 				switch event.Type {
 				case "text":
-					isClean, reason := moderation.ModerateText(event.Content)
-					if !isClean {
-						log.Printf("Text moderation failed: %s", reason)
-					} else {
-						log.Printf("Text passed moderation")
-					}
+					go moderation.ModerateText(event.Content, event.Filename)
+				case "image":
+					go moderation.ModerateText(event.Path, event.Filename)
+				case "video":
+					go moderation.ModerateText(event.Path, event.Filename)
 				default:
-					log.Printf("Unsupported content type: %s", event.Type)
+					log.Printf("Unknown content type: %s", event.Type)
 				}
+
+				lastID = msg.ID
 			}
 		}
 	}
