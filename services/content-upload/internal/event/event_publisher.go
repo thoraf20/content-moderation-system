@@ -17,7 +17,7 @@ type ModerationEvent struct {
 	Type     string `json:"type"`
 }
 
-func PublishModerationEvent(filename, path string) {
+func PublishModerationEvent(filename, path string, fileType string) {
 	client := redis.NewClient(&redis.Options{
 		Addr: os.Getenv("BROKER_URL"), // "localhost:6379", // Default Redis port
 	})
@@ -25,7 +25,7 @@ func PublishModerationEvent(filename, path string) {
 	event := ModerationEvent{
 		Filename: filename,
 		Path:     path,
-		Type:     "image",
+		Type:     fileType,
 	}
 
 	data, err := json.Marshal(event)
