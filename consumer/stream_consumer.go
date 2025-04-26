@@ -5,7 +5,10 @@ import (
 	"content-analysis/moderation"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -26,15 +29,25 @@ func StartStreamConsumer() {
 		Addr: config.Get("BROKER_URL"),
 	})
 
+	// Create the consumer group if it doesn't exist
+	err := client.XGroupCreateMkStream(ctx, config.Get("TOPIC_NAME"), "moderation_group", "$").Err()
 	defer client.Close()
 
-	lastID := "0"
+	if err != nil && !strings.Contains(err.Error(), "BUSYGROUP") {
+		log.Fatalf("Could not create consumer group: %v", err)
+	}
+
+	consumerName := fmt.Sprintf("consumer-%d", time.Now().UnixNano())
 
 	for {
-		streams, err := client.XRead(ctx, &redis.XReadArgs{
-			Streams: []string{config.Get("TOPIC_NAME"), lastID},
-			Count:   0,
-			Block:   10,
+		claimPendingMessages(client, consumerName)
+		// streams, err := client.XRead(ctx, &redis.XReadArgs{
+		streams, err := client.XReadGroup(ctx, &redis.XReadGroupArgs{
+			Group:    "moderation_group",
+			Consumer: consumerName,
+			Streams: []string{config.Get("TOPIC_NAME"), ">"},
+			Count:   5,
+			Block:   0,
 		}).Result()
 
 		if err != nil {
@@ -44,28 +57,85 @@ func StartStreamConsumer() {
 
 		for _, stream := range streams {
 			for _, msg := range stream.Messages {
-				eventJSON := msg.Values["event"].(string)
-
-				var event ModerationEvent
-				if err := json.Unmarshal([]byte(eventJSON), &event); 
-				err != nil {
-					log.Printf("Error unmarshaling event: %v", err)
-					continue
-				}
-
-				switch event.Type {
-				case "text":
-					go moderation.ModerateText(event.Content, event.Filename)
-				case "image":
-					go moderation.ModerateText(event.Path, event.Filename)
-				case "video":
-					go moderation.ModerateText(event.Path, event.Filename)
-				default:
-					log.Printf("Unknown content type: %s", event.Type)
-				}
-
-				lastID = msg.ID
+				processAndAckMessage(client, msg)
 			}
+		}
+	}
+}
+
+func processAndAckMessage(client *redis.Client, msg redis.XMessage) {
+	eventJSON, ok := msg.Values["event"].(string)
+	if !ok {
+		log.Println("Invalid event format")
+		return
+	}
+
+	var event ModerationEvent
+	if err := json.Unmarshal([]byte(eventJSON), &event); err != nil {
+		log.Printf("Error unmarshaling event: %v", err)
+		return
+	}
+
+	// Dispatch moderation
+	var moderationErr error
+	
+	switch event.Type {
+	case "text":
+		_, moderationErr = moderation.ModerateText(event.Content, event.Filename)
+	case "image":
+		_, moderationErr = moderation.ModerateText(event.Path, event.Filename)
+	case "video":
+		_, moderationErr = moderation.ModerateText(event.Path, event.Filename)
+	default:
+		log.Printf("Unknown content type: %s", event.Type)
+	}
+
+	// Only ACK if moderation succeeded
+	if moderationErr == nil {
+		err := client.XAck(ctx, config.Get("TOPIC_NAME"), "moderation_group", msg.ID).Err()
+		if err != nil {
+			log.Printf("Failed to ACK message: %v", err)
+		} else {
+			log.Printf("ACKed message ID: %s", msg.ID)
+		}
+	} else {
+		log.Printf("Moderation failed for message ID %s, will retry later", msg.ID)
+	}
+}
+
+func claimPendingMessages(client *redis.Client, consumerName string) {
+	pending, err := client.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: config.Get("TOPIC_NAME"),
+		Group:  "moderation_group",
+		Idle:   30 * time.Second, // Only reclaim messages idle for 30s+
+		Count:  5,
+		Start:  "-",
+		End:    "+",
+	}).Result()
+
+	if err != nil && err != redis.Nil {
+		log.Printf("Error checking pending: %v", err)
+		return
+	}
+
+	for _, pend := range pending {
+		// Claim message
+		claimedMsgs, err := client.XClaim(ctx, &redis.XClaimArgs{
+			Stream:   config.Get("TOPIC_NAME"),
+			Group:    "moderation_group",
+			Consumer: consumerName,
+			MinIdle:  30 * time.Second,
+			Messages: []string{pend.ID},
+		}).Result()
+
+		if err != nil {
+			log.Printf("Error claiming message: %v", err)
+			continue
+		}
+
+		// Process each claimed message
+		for _, msg := range claimedMsgs {
+			processAndAckMessage(client, msg)
 		}
 	}
 }

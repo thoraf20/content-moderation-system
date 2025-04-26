@@ -14,7 +14,7 @@ type ModerationResult struct {
 	Offenses []string
 }
 
-func ModerateText(content, id string) ModerationResult {
+func ModerateText(content, id string) (ModerationResult, error) {
 	offenses := []string{}
 
 	for _, word := range bannedWords {
@@ -28,8 +28,8 @@ func ModerateText(content, id string) ModerationResult {
 			Flagged:  true,
 			Reason:   "offensive content detected",
 			Offenses: offenses,
-		}
+		}, nil
 	}
 
-	return ModerationResult{Flagged: false, Reason: "clean"}
+	return ModerationResult{Flagged: false, Reason: "clean"}, nil
 }
