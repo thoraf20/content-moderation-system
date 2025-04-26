@@ -71,27 +71,27 @@ func processAndAckMessage(client *redis.Client, msg redis.XMessage) {
 	}
 
 	var event ModerationEvent
-	if err := json.Unmarshal([]byte(eventJSON), &event); err != nil {
+	if err := json.Unmarshal([]byte(eventJSON), &event); 
+	err != nil {
 		log.Printf("Error unmarshaling event: %v", err)
 		return
 	}
 
-	// Dispatch moderation
-	var moderationErr error
-	
-	switch event.Type {
-	case "text":
-		_, moderationErr = moderation.ModerateText(event.Content, event.Filename)
-	case "image":
-		_, moderationErr = moderation.ModerateText(event.Path, event.Filename)
-	case "video":
-		_, moderationErr = moderation.ModerateText(event.Path, event.Filename)
-	default:
-		log.Printf("Unknown content type: %s", event.Type)
+	engine, err := moderation.GetModerationEngine(event.Type)
+	if err != nil {
+		log.Printf("Error getting moderation engine: %v", err)
+		return
 	}
 
-	// Only ACK if moderation succeeded
-	if moderationErr == nil {
+	var content string
+	if event.Type == "text" {
+		content = event.Content
+	} else {
+		content = event.Path
+	}
+
+	err = engine.Moderate(content, event.Filename)
+	if err == nil {
 		err := client.XAck(ctx, config.Get("TOPIC_NAME"), "moderation_group", msg.ID).Err()
 		if err != nil {
 			log.Printf("Failed to ACK message: %v", err)
@@ -99,18 +99,17 @@ func processAndAckMessage(client *redis.Client, msg redis.XMessage) {
 			log.Printf("ACKed message ID: %s", msg.ID)
 		}
 	} else {
-		log.Printf("Moderation failed for message ID %s, will retry later", msg.ID)
+		log.Printf("Moderation failed for message ID %s: %v", msg.ID, err)
 	}
 }
 
 func claimPendingMessages(client *redis.Client, consumerName string) {
 	pending, err := client.XPendingExt(ctx, &redis.XPendingExtArgs{
-		Stream: config.Get("TOPIC_NAME"),
-		Group:  "moderation_group",
-		Idle:   30 * time.Second, // Only reclaim messages idle for 30s+
-		Count:  5,
-		Start:  "-",
-		End:    "+",
+    Stream: config.Get("TOPIC_NAME"),
+    Group:  "moderation_group",
+    Start:  "-",
+    End:    "+",
+    Count:  5,
 	}).Result()
 
 	if err != nil && err != redis.Nil {
