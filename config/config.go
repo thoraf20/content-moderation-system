@@ -6,16 +6,20 @@ import (
 )
 
 func LoadConfig() {
-	viper.SetDefault("BROKER_URL", "localhost:6379")
-	viper.SetDefault("TOPIC_NAME", "content_events")
-	viper.AutomaticEnv()
+	// Load from .env first
+	viper.SetConfigFile(".env")
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Println("No .env file found, continuing...")
+	}
 
-	log.Printf("Redis: %s | Stream: %s",
-		viper.GetString("BROKER_URL"),
-		viper.GetString("TOPIC_NAME"),
-	)
+	viper.AutomaticEnv()
 }
 
 func Get(key string) string {
-	return viper.GetString(key)
+	value := viper.GetString(key)
+	if value == "" {
+		log.Printf("Warning: %s not set in config or environment variables", key)
+	}
+	return value
 }

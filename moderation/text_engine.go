@@ -1,19 +1,33 @@
-// moderation/text_engine.go
 package moderation
 
-import "log"
+import (
+	"fmt"
+	"log"
+	"strings"
+)
 
 type TextModerationEngine struct{}
 
 func (t *TextModerationEngine) Moderate(content string, filename string) error {
 	log.Printf("[TextModeration] Moderating text: %s", content)
 
-	// TODO: Actually call your ML model or API here
-	// Simulating moderation
-	if len(content) == 0 {
-		return nil // or return an error if you want
+	bannedWords := []string{"badword", "hate", "spam", "violence", "abuse", "harassment", "bullying", "racism", "sexism", "discrimination"}
+	maxLength := 5000 
+
+	contentLower := strings.ToLower(content)
+	for _, word := range bannedWords {
+		if strings.Contains(contentLower, word) {
+			return fmt.Errorf("text contains banned word: %s", word)
+		}
 	}
 
-	// Imagine we send `content` to a language model / API for analysis
+	if len(content) == 0 {
+		return fmt.Errorf("text content is empty")
+	}
+	
+	if len(content) > maxLength {
+		return fmt.Errorf("text content exceeds maximum length of %d characters", maxLength)
+	}
+
 	return nil
 }
